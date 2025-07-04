@@ -90,7 +90,7 @@ def get_tooth_mesh(payload: dict = Body(...)):
     """
     file_path = payload.get("file_path", "backend/oas/00000000.oas")
     tooth_id = payload["tooth_id"]
-    stage = payload.get("stage", 0)
+    # stage = payload.get("stage", 0)
     ortho_case = get_cached_ortho_case(file_path)
 
     crown_vertices, crown_faces = ortho_case.get_crown_vertices_faces(int(tooth_id))
