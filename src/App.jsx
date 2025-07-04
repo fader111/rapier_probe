@@ -1,51 +1,49 @@
-import React, { useRef, useState, useEffect, useMemo, useCallback, Suspense} from 'react'
-import { Box, Torus, TrackballControls } from "@react-three/drei";
+import React, { useEffect, useState, Suspense } from 'react'
 import { Canvas } from "@react-three/fiber";
-import { Physics, RigidBody, CuboidCollider } from "@react-three/rapier";
-import { STLLoader } from 'three/examples/jsm/loaders/STLLoader';
-import { useLoader } from '@react-three/fiber';
-import { MeshStandardMaterial } from 'three';
+import { Physics, RigidBody } from "@react-three/rapier";
+import { TrackballControls } from "@react-three/drei";
 import * as THREE from 'three';
-import { TextureLoader } from 'three';
 
-const Tooth = (props) => {
-  const { toothID, type, position = [0,0,0], rotation = [0,0,0] } = props;
-  // STL loading with error handling
-  const crown = useLoader(STLLoader, `/crowns/${toothID}.stl`);
-  const root = useLoader(STLLoader, `/shortRoots/${toothID}.stl`);
-  const texture = useLoader(TextureLoader, `/textures/teeth.png`);
+const Tooth = ({ toothID, type = "static", position = [0,0,0], rotation = [0,0,0], filePath = "backend/oas/00000000.oas", stage = 0 }) => {
+  const [crownGeometry, setCrownGeometry] = useState();
+  const [rootGeometry, setRootGeometry] = useState();
 
-  const combinedGeometries = useMemo(() => {
-    if (!crown?.attributes?.position || !crown?.attributes?.normal ||
-        !root?.attributes?.position || !root?.attributes?.normal) {
-      return { crownGeometry: null, rootGeometry: null };
+  useEffect(() => {
+    async function fetchMesh() {
+      const res = await fetch("http://localhost:8000/get_tooth_mesh/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // body: JSON.stringify({ tooth_id: toothID, file_path: filePath, stage })
+        body: JSON.stringify({ tooth_id: toothID })
+      });
+      const data = await res.json();
+      // Helper to convert vertices/faces to BufferGeometry
+      function createGeometry(vertices, faces) {
+        const geometry = new THREE.BufferGeometry();
+        const verts = new Float32Array(vertices.flat());
+        const indices = new Uint32Array(faces.flat());
+        geometry.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+        geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+        geometry.computeVertexNormals();
+        return geometry;
+      }
+      if (data.crown) setCrownGeometry(createGeometry(data.crown.vertices, data.crown.faces));
+      if (data.root) setRootGeometry(createGeometry(data.root.vertices, data.root.faces));
     }
-    const crownGeometry = new THREE.BufferGeometry();
-    const rootGeometry = new THREE.BufferGeometry();
-    crownGeometry.setAttribute('position', new THREE.BufferAttribute(crown.attributes.position.array, 3));
-    crownGeometry.setAttribute('normal', new THREE.BufferAttribute(crown.attributes.normal.array, 3));
-    crownGeometry.computeVertexNormals(); // Ensure normals are computed for lighting
-    rootGeometry.setAttribute('position', new THREE.BufferAttribute(root.attributes.position.array, 3));
-    rootGeometry.setAttribute('normal', new THREE.BufferAttribute(root.attributes.normal.array, 3));
-    rootGeometry.computeVertexNormals(); // Ensure normals are computed for lighting
-    return { crownGeometry, rootGeometry };
-  }, [crown, root]);
-  console.log("Tooth ID:", toothID, "Type:", type);
+    fetchMesh();
+  // }, [toothID, filePath, stage]);
+  }, [toothID]);
+
   return (
-    // colliders - hull for dynamic, trimesh for static objects
-    // <RigidBody colliders="trimesh" position={position} rotation={rotation}>
-    // <RigidBody type="fixed" colliders="trimesh" restitution={0.2} friction={0.8} position={position} rotation={rotation}>
-    // <RigidBody colliders="hull" restitution={0.2} friction={0.8} type={type} position={position} rotation={rotation}>
     <RigidBody colliders="trimesh" restitution={0.2} friction={0.8} type={type} position={position} rotation={rotation}>
       <group>
-        {combinedGeometries.crownGeometry && (
-          <mesh geometry={combinedGeometries.crownGeometry}>
-            {/* <meshStandardMaterial map={texture} color="#cccccc" metalness={0.2} roughness={0.7} /> */}
-            <meshStandardMaterial map={texture} color="#ffffff" metalness={0.1} roughness={0.91} />
+        {crownGeometry && (
+          <mesh geometry={crownGeometry}>
+            <meshStandardMaterial color="#ffffff" metalness={0.1} roughness={0.91} />
           </mesh>
         )}
-        {combinedGeometries.rootGeometry && (
-          <mesh geometry={combinedGeometries.rootGeometry}>
+        {rootGeometry && (
+          <mesh geometry={rootGeometry}>
             <meshStandardMaterial color="#eeeeee" metalness={0.1} roughness={0.118} />
           </mesh>
         )}
@@ -62,16 +60,9 @@ const App = () => {
         <directionalLight position={[10, 10, 10]} intensity={1} castShadow />
         <Suspense>
           <Physics gravity={[0, 0, 0]}>
-            {/* площадка под зубами*/}
-            {/* <CuboidCollider position={[0, -2, 0]} args={[20, 0.5, 20]} /> */} 
             <Tooth type={"static"} toothID="11" position={[-5, 0, 0]} rotation={[0, 0, 0]} />
             <Tooth type={"dynamic"} toothID="12" position={[2, 0, 0]} rotation={[0, 0, 0]} />
             <Tooth type={"dynamic"} toothID="13" position={[-9, 0, 0]} rotation={[0, 0, 0]} />
-            {/* <Tooth type={"dynamic"} toothID="14" position={[-9, 0, 0]} rotation={[0, 0, 0]} /> */}
-            {/* <Tooth type={"dynamic"} toothID="15" position={[-9, 0, 0]} rotation={[0, 0, 0]} /> */}
-            {/* <Tooth type={"dynamic"} toothID="16" position={[-9, 0, 0]} rotation={[0, 0, 0]} /> */}
-            {/* <Tooth type={"dynamic"} toothID="17" position={[-9, 0, 0]} rotation={[0, 0, 0]} /> */}
-            {/* <Tooth toothID="21" position={[0, 0, 0]} rotation={[0, 0, 0]} /> */}
           </Physics>
         </Suspense>
         <TrackballControls rotateSpeed={2.5} />
