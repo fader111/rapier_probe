@@ -72,23 +72,18 @@ const App = () => {
     fetchAllTransforms();
   }, [stage]);
 
-  // Fetch all meshes for all teeth once transforms are loaded
+  // Fetch all meshes for all teeth in one request
   useEffect(() => {
     async function fetchAllMeshes() {
       if (!teethTransforms || Object.keys(teethTransforms).length === 0) return;
-      setLoading(true);
-      const meshEntries = await Promise.all(
-        Object.keys(teethTransforms).map(async (toothID) => {
-          const meshRes = await fetch("http://localhost:8000/get_tooth_mesh/", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ tooth_id: toothID })
-          });
-          const meshData = await meshRes.json();
-          return [toothID, meshData];
-        })
-      );
-      setTeethMeshes(Object.fromEntries(meshEntries));
+      const tooth_ids = Object.keys(teethTransforms);
+      const meshRes = await fetch("http://localhost:8000/get_teeth_meshes/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tooth_ids })
+      });
+      const meshData = await meshRes.json();
+      setTeethMeshes(meshData);
       setLoading(false);
     }
     fetchAllMeshes();
