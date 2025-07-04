@@ -43,7 +43,7 @@ def get_ortho_case_file_path():
     get_cached_ortho_case()
     return {"file_path": ortho_case_cache["file_path"]}
 
-def to_list_of_lists(data):
+def to_list_of_lists(data): # actually needs only data.tolist().
     if hasattr(data, 'tolist'):
         return data.tolist()
     elif isinstance(data, list):
@@ -87,33 +87,24 @@ def convert_expanded_mesh_to_standard(vertices, faces):
 def get_tooth_mesh(payload: dict = Body(...)):
     """
     Returns vertices and faces for crown and root for a given tooth_id and stage.
-    Adds debug prints for type, shape, and sample data.
     """
     file_path = payload.get("file_path", "backend/oas/00000000.oas")
     tooth_id = payload["tooth_id"]
     stage = payload.get("stage", 0)
     ortho_case = get_cached_ortho_case(file_path)
-    # Check and use correct method names for mesh extraction
-    if hasattr(ortho_case, 'get_crown_vertices_faces'):
-        crown_vertices, crown_faces = ortho_case.get_crown_vertices_faces(int(tooth_id))
-        crown_vertices, crown_faces = convert_expanded_mesh_to_standard(crown_vertices, crown_faces)
-    else:
-        crown_vertices, crown_faces = [], []
+
+    crown_vertices, crown_faces = ortho_case.get_crown_vertices_faces(int(tooth_id))
+    crown_vertices, crown_faces = convert_expanded_mesh_to_standard(crown_vertices, crown_faces)
     
-    if hasattr(ortho_case, 'get_root_vertices_faces'):
-        root_vertices, root_faces = ortho_case.get_root_vertices_faces(int(tooth_id))
-        root_vertices, root_faces = convert_expanded_mesh_to_standard(root_vertices, root_faces)
-    else:
-        root_vertices, root_faces = [], []
+    root_vertices, root_faces = ortho_case.get_root_vertices_faces(int(tooth_id))
+    root_vertices, root_faces = convert_expanded_mesh_to_standard(root_vertices, root_faces)
     
-    if hasattr(ortho_case, 'get_short_root_vertices_faces'):
-        root_vertices, root_faces = ortho_case.get_short_root_vertices_faces(int(tooth_id))
-        root_vertices, root_faces = convert_expanded_mesh_to_standard(root_vertices, root_faces)
-    else:
-        root_vertices, root_faces = [], []
+    short_root_vertices, short_root_faces = ortho_case.get_short_root_vertices_faces(int(tooth_id))
+    short_root_vertices, short_root_faces = convert_expanded_mesh_to_standard(short_root_vertices, short_root_faces)
 
     return {
         "crown": {"vertices": crown_vertices, "faces": crown_faces},
-        "root": {"vertices": root_vertices, "faces": root_faces}
+        "root": {"vertices": root_vertices, "faces": root_faces},
+        "short_root": {"vertices": short_root_vertices, "faces": short_root_faces}    
     }
 
