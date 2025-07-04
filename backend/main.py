@@ -43,22 +43,22 @@ def get_ortho_case_file_path():
     get_cached_ortho_case()
     return {"file_path": ortho_case_cache["file_path"]}
 
-def to_list_of_lists(data): # actually needs only data.tolist().
-    if hasattr(data, 'tolist'):
-        return data.tolist()
-    elif isinstance(data, list):
-        if not data:
-            return []
-        # If the first element is iterable (list/tuple), convert all to lists
-        if hasattr(data[0], '__iter__') and not isinstance(data[0], (str, bytes)):
-            return [list(item) for item in data]
-        else:
-            # Flat list of ints/floats
-            return [list(data)]
-    elif isinstance(data, (int, float)):
-        return [[data]]
-    else:
-        return [list(data)]
+# def to_list_of_lists(data): # actually needs only data.tolist().
+#     if hasattr(data, 'tolist'):
+#         return data.tolist()
+#     elif isinstance(data, list):
+#         if not data:
+#             return []
+#         # If the first element is iterable (list/tuple), convert all to lists
+#         if hasattr(data[0], '__iter__') and not isinstance(data[0], (str, bytes)):
+#             return [list(item) for item in data]
+#         else:
+#             # Flat list of ints/floats
+#             return [list(data)]
+#     elif isinstance(data, (int, float)):
+#         return [[data]]
+#     else:
+#         return [list(data)]
 
 def convert_expanded_mesh_to_standard(vertices, faces):
     """

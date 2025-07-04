@@ -1,77 +1,120 @@
 import React, { useEffect, useState, Suspense } from 'react'
 import { Canvas } from "@react-three/fiber";
-import { Physics, RigidBody } from "@react-three/rapier";
 import { TrackballControls } from "@react-three/drei";
 import * as THREE from 'three';
 
-const Tooth = ({ toothID, type = "static", position = [0,0,0], rotation = [0,0,0], useShortRoots = true }) => {
+const Tooth = ({ meshData, transform }) => {
   const [crownGeometry, setCrownGeometry] = useState();
   const [rootGeometry, setRootGeometry] = useState();
 
   useEffect(() => {
-    async function fetchMesh() {
-      const res = await fetch("http://localhost:8000/get_tooth_mesh/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // body: JSON.stringify({ tooth_id: toothID, file_path: filePath, stage })
-        body: JSON.stringify({ tooth_id: toothID })
-      });
-      const data = await res.json();
-      // Helper to convert vertices/faces to BufferGeometry
-      function createGeometry(vertices, faces) {
-        const geometry = new THREE.BufferGeometry();
-        const verts = new Float32Array(vertices.flat());
-        const indices = new Uint32Array(faces.flat());
-        geometry.setAttribute('position', new THREE.BufferAttribute(verts, 3));
-        geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-        geometry.computeVertexNormals();
-        return geometry;
-      }
-      setCrownGeometry(createGeometry(data.crown.vertices, data.crown.faces));
-      console.log("Tooth ID:", toothID, "Use short roots:", useShortRoots);
-      if (useShortRoots) setRootGeometry(createGeometry(data.short_root.vertices, data.short_root.faces));
-      else setRootGeometry(createGeometry(data.root.vertices, data.root.faces));
+    if (!meshData) return;
+    function createGeometry(vertices, faces) {
+      const geometry = new THREE.BufferGeometry();
+      const verts = new Float32Array(vertices.flat());
+      const indices = new Uint32Array(faces.flat());
+      geometry.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+      geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+      geometry.computeVertexNormals();
+      return geometry;
     }
-    fetchMesh();
-  // }, [toothID, filePath, stage]);
-  }, [toothID, useShortRoots]);
+    setCrownGeometry(createGeometry(meshData.crown.vertices, meshData.crown.faces));
+    if (meshData.short_root && meshData.short_root.vertices.length)
+      setRootGeometry(createGeometry(meshData.short_root.vertices, meshData.short_root.faces));
+    else
+      setRootGeometry(createGeometry(meshData.root.vertices, meshData.root.faces));
+  }, [meshData]);
+
+  let groupProps = {};
+  if (transform) {
+    const q = transform.rotation;
+    const t = transform.translation;
+    groupProps = {
+      quaternion: new THREE.Quaternion(q.x, q.y, q.z, q.w),
+      position: [t.x, t.y, t.z]
+    };
+  }
 
   return (
-    <RigidBody colliders="trimesh" restitution={0.2} friction={0.8} type={type} position={position} rotation={rotation}>
-      <group>
-        {crownGeometry && (
-          <mesh geometry={crownGeometry}>
-            <meshStandardMaterial color="#ffffff" metalness={0.5} roughness={0.2} />
-          </mesh>
-        )}
-        {rootGeometry && (
-          <mesh geometry={rootGeometry}>
-            <meshStandardMaterial color="#eeeeee" metalness={0.1} roughness={0.118} />
-          </mesh>
-        )}
-      </group>
-    </RigidBody>
+    <group {...groupProps}>
+      {crownGeometry && (
+        <mesh geometry={crownGeometry}>
+          <meshStandardMaterial color="#ffffff" metalness={0.5} roughness={0.2} />
+        </mesh>
+      )}
+      {rootGeometry && (
+        <mesh geometry={rootGeometry}>
+          <meshStandardMaterial color="#eeeeee" metalness={0.1} roughness={0.118} />
+        </mesh>
+      )}
+    </group>
   );
 };
 
 const App = () => {
-  const useShortRoots = true; // This is a placeholder for your logic to toggle short roots
+  const [teethTransforms, setTeethTransforms] = useState({});
+  const [teethMeshes, setTeethMeshes] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [stage, setStage] = useState(0);
+  const useShortRoots = true;
+
+  // Fetch all transforms for the current stage once
+  useEffect(() => {
+    async function fetchAllTransforms() {
+      const trRes = await fetch("http://localhost:8000/get_stage_relative_transform/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage })
+      });
+      const trData = await trRes.json();
+      setTeethTransforms(trData);
+    }
+    fetchAllTransforms();
+  }, [stage]);
+
+  // Fetch all meshes for all teeth once transforms are loaded
+  useEffect(() => {
+    async function fetchAllMeshes() {
+      if (!teethTransforms || Object.keys(teethTransforms).length === 0) return;
+      setLoading(true);
+      const meshEntries = await Promise.all(
+        Object.keys(teethTransforms).map(async (toothID) => {
+          const meshRes = await fetch("http://localhost:8000/get_tooth_mesh/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tooth_id: toothID })
+          });
+          const meshData = await meshRes.json();
+          return [toothID, meshData];
+        })
+      );
+      setTeethMeshes(Object.fromEntries(meshEntries));
+      setLoading(false);
+    }
+    fetchAllMeshes();
+  }, [teethTransforms]);
+
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'fixed', top: 0, left: 0 }}>
-      <Canvas camera={{ position: [0, 0, 60], fov: 35 }} shadows style={{ width: '100%', height: '100%' }}>
-        <ambientLight intensity={0.5} />
-        <directionalLight position={[10, 10, 10]} intensity={3} 
-          // castShadow 
-        />
+      <Canvas 
+        camera={{ position: [-8, -45, 40], fov: 35 }}
+        onCreated={({ camera }) => { camera.lookAt(-8, -45, 7.5); }}
+      >
+        <ambientLight intensity={1} />
+        <directionalLight position={[-8, -35, 40]} intensity={3} />
+        <axesHelper args={[5]} />
         <Suspense>
-          <Physics gravity={[0, 0, 0]}>
-            <Tooth type={"static"} toothID="11" position={[-5, 0, 0]} rotation={[0, 0, 0]} useShortRoots={false}/>
-            <Tooth type={"dynamic"} toothID="12" position={[2, 0, 0]} rotation={[0, 0, 0]} />
-            <Tooth type={"dynamic"} toothID="13" position={[-9, 0, 0]} rotation={[0, 0, 0]} />
-          </Physics>
+          {!loading && Object.keys(teethMeshes).map((toothID) => (
+            <Tooth 
+              key={toothID}
+              meshData={teethMeshes[toothID]}
+              transform={teethTransforms[toothID]}
+            />
+          ))}
         </Suspense>
         <TrackballControls rotateSpeed={2.5} />
       </Canvas>
+      {loading && <div style={{position:'absolute',top:10,left:10,color:'white',background:'rgba(0,0,0,0.5)',padding:'8px',borderRadius:'4px'}}>Loading teeth...</div>}
     </div>
   );
 };
